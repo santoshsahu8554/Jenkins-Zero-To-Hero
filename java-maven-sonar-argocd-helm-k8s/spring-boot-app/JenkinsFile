@@ -1,38 +1,31 @@
 pipeline {
-  agent {
-    docker {
-      image 'abhishekf5/maven-abhishek-docker-agent:v1'
-      args '--user root -v /var/run/docker.sock:/var/run/docker.sock'
-    }
-  }
 
   environment {
-    SONAR_URL = "http://3.80.46.222:9000"
+    SONAR_URL    = "http://3.80.46.222:9000"
+    DOCKER_IMAGE = "santosh8554/ultimate-cicd:${BUILD_NUMBER}"
   }
 
   stages {
 
     stage('Checkout') {
+      agent any
       steps {
         git branch: 'main',
             url: 'https://github.com/santoshsahu8554/Jenkins-Zero-To-Hero'
       }
     }
 
-    stage('Build and Test') {
-      steps {
-        sh '''
-          cd java-maven-sonar-argocd-helm-k8s/spring-boot-app
-          mvn clean package
-        '''
+    stage('Build and Test + Sonar') {
+      agent {
+        docker {
+          image 'abhishekf5/maven-abhishek-docker-agent:v1'
+        }
       }
-    }
-
-    stage('Static Code Analysis') {
       steps {
         withCredentials([string(credentialsId: 'sonarqube', variable: 'SONAR_AUTH_TOKEN')]) {
           sh '''
             cd java-maven-sonar-argocd-helm-k8s/spring-boot-app
+            mvn clean package
             mvn org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
               -Dsonar.login=$SONAR_AUTH_TOKEN \
               -Dsonar.host.url=${SONAR_URL}
@@ -42,23 +35,25 @@ pipeline {
     }
 
     stage('Build and Push Docker Image') {
-      environment {
-        DOCKER_IMAGE = "santosh8554/ultimate-cicd:${BUILD_NUMBER}"
-      }
+      agent any
       steps {
-        script {
+        withCredentials([usernamePassword(
+          credentialsId: 'docker-cred',
+          usernameVariable: 'DOCKER_USER',
+          passwordVariable: 'DOCKER_PASS'
+        )]) {
           sh '''
             cd java-maven-sonar-argocd-helm-k8s/spring-boot-app
+            docker login -u $DOCKER_USER -p $DOCKER_PASS
             docker build -t ${DOCKER_IMAGE} .
+            docker push ${DOCKER_IMAGE}
           '''
-          docker.withRegistry('https://index.docker.io/v1/', 'docker-cred') {
-            docker.image("${DOCKER_IMAGE}").push()
-          }
         }
       }
     }
 
     stage('Update Deployment File') {
+      agent any
       environment {
         GIT_REPO_NAME = "Jenkins-Zero-To-Hero"
         GIT_USER_NAME = "santosh8554"
