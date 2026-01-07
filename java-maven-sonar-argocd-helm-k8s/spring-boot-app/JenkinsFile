@@ -1,6 +1,10 @@
 pipeline {
     agent any
 
+    environment {
+        SONAR_URL = "http://3.80.46.222:9000"
+    }
+
     stages {
 
         stage('Checkout') {
@@ -19,11 +23,27 @@ pipeline {
             }
         }
 
+        stage('SonarQube Analysis') {
+            steps {
+                withCredentials([string(credentialsId: 'sonarqube', variable: 'SONAR_TOKEN')]) {
+                    sh '''
+                        cd java-maven-sonar-argocd-helm-k8s/spring-boot-app
+                        mvn org.sonarsource.scanner.maven:sonar-maven-plugin:sonar \
+                          -Dsonar.login=$SONAR_TOKEN \
+                          -Dsonar.host.url=${SONAR_URL}
+                    '''
+                }
+            }
+        }
+
     }
 
     post {
         success {
-            echo "Build stage successful"
+            echo "Build + Sonar completed successfully"
+        }
+        failure {
+            echo "Pipeline failed"
         }
     }
 }
