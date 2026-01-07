@@ -2,12 +2,28 @@ pipeline {
     agent any
 
     stages {
-        stage('Syntax Test') {
+
+        stage('Checkout') {
+            steps {
+                git branch: 'main',
+                    url: 'https://github.com/santosh8554/Jenkins-Zero-To-Hero.git'
+            }
+        }
+
+        stage('Build') {
             steps {
                 sh '''
-                    echo "Jenkinsfile syntax is OK"
+                    cd java-maven-sonar-argocd-helm-k8s/spring-boot-app
+                    mvn clean package
                 '''
             }
+        }
+
+    }
+
+    post {
+        success {
+            echo "Build stage successful"
         }
     }
 }
